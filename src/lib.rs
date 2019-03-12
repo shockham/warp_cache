@@ -2,45 +2,45 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-use warp::{filters::BoxedFilter, path::FullPath, Filter};
+use warp::{path::FullPath, Filter};
 
-pub fn cache(store: Arc<Mutex<HashMap<String, String>>>) -> BoxedFilter<(String,)> {
-    warp::path::full()
-        .map(move |path: FullPath| {
-            let mut cache_store = store.lock().unwrap();
+pub fn cache<F>(func: F) -> impl Filter<Extract = (String,)>
+where
+    F: Send + Sync + Clone + Fn() -> String,
+{
+    let store = Arc::new(Mutex::new(HashMap::<String, String>::new()));
 
-	    let path_string = path.as_str().to_string();
+    warp::path::full().map(move |path: FullPath| {
+        let mut cache_store = store.lock().unwrap();
 
-            if cache_store.contains_key(&path_string) {
-                if let Some(val) = cache_store.get(&path_string) {
-                    return val.clone();
-		}
-            } else {
-                cache_store.insert(path_string, "from cache".to_string());
+        let path_string = path.as_str().to_string();
+
+        if cache_store.contains_key(&path_string) {
+            if let Some(val) = cache_store.get(&path_string) {
+                return val.clone();
             }
+        }
 
-            String::from("")
-        })
-        .boxed()
+        let resp = func();
+
+        cache_store.insert(path_string, resp.clone());
+
+        resp
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::cache;
-    use std::{
-        collections::HashMap,
-        sync::{Arc, Mutex},
-    };
 
     #[test]
     fn it_works() {
-        let store = Arc::new(Mutex::new(HashMap::new()));
-        let filter = cache(store);
+        let filter = cache(|| "test".to_string());
 
         let value = warp::test::request().path("/").filter(&filter).unwrap();
-        assert_eq!(value, "");
+        assert_eq!(value, "test");
 
         let value = warp::test::request().path("/").filter(&filter).unwrap();
-        assert_eq!(value, "from cache");
+        assert_eq!(value, "test");
     }
 }
