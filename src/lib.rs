@@ -33,14 +33,14 @@ where
 mod tests {
     use super::cache;
 
-    #[test]
-    fn it_works() {
+    #[tokio::test]
+    async fn it_works() {
         let filter = cache(|| "test".to_string());
 
-        let value = warp::test::request().path("/").filter(&filter).unwrap();
+        let value = warp::test::request().path("/").filter(&filter).await.unwrap();
         assert_eq!(value, "test");
 
-        let value = warp::test::request().path("/").filter(&filter).unwrap();
+        let value = warp::test::request().path("/").filter(&filter).await.unwrap();
         assert_eq!(value, "test");
     }
 }
